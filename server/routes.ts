@@ -80,28 +80,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Payment endpoint
-  app.post("/api/payment", async (req, res) => {
-  const { transactionCode } = req.body;
-
-  if (transactionCode === "bintunet") {
-    return res.json({
-      success: true,
-      message: "Universal access granted",
-    });
-  }
-
-  return res.status(400).json({
-    error: "Invalid transaction code. Use 'bintunet' for demo access.",
-  });
- 
-  return res.status(400).json({
-    error: "Invalid transaction code. Use 'bintunet' for demo access.",
-  });
-
-      if (validCodes[plan] !== transactionCode && transactionCode !== "bintunet") {
-        return res.status(400).json({ error: "Invalid transaction code" });
-      }
+  
 
       // Calculate expiration
       let expiresAt: Date | null = null;
