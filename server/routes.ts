@@ -90,8 +90,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: "Universal access granted",
       plan,
     });
-  }
-
+ 
   return res.status(400).json({
     error: "Invalid transaction code. Use 'bintunet' for demo access.",
   });
