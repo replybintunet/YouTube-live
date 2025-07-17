@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { loginSchema, paymentSchema, streamConfigSchema } from "@shared/schema";
+import { loginSchema, streamConfigSchema } from "@shared/schema";
 import { nanoid } from "nanoid";
 import multer from "multer";
 import path from "path";
@@ -27,7 +27,7 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     const allowedExtensions = ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv'];
     const fileExtension = path.extname(file.originalname).toLowerCase();
-    
+
     if (file.mimetype.startsWith('video/') || 
         file.mimetype === 'application/octet-stream' ||
         allowedExtensions.includes(fileExtension)) {
@@ -62,7 +62,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/login", async (req, res) => {
     try {
       const { accessCode } = loginSchema.parse(req.body);
-      
+
       if (accessCode !== "bintunet") {
         return res.status(401).json({ error: "Invalid access code" });
       }
@@ -73,33 +73,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax'
       });
-      
+
+      // Create session immediately
+      await storage.createSession({
+        sessionId,
+        plan: 'lifetime',
+        expiresAt: null
+      });
+
       res.json({ success: true, sessionId });
     } catch (error) {
       res.status(400).json({ error: "Invalid request data" });
-    }
-  });
-
-  
-
-      // Calculate expiration
-      let expiresAt: Date | null = null;
-      if (plan === "5hours") {
-        expiresAt = new Date(Date.now() + 5 * 60 * 60 * 1000);
-      } else if (plan === "12hours") {
-        expiresAt = new Date(Date.now() + 12 * 60 * 60 * 1000);
-      }
-      // lifetime has no expiration
-
-      const session = await storage.createSession({
-        sessionId,
-        plan,
-        expiresAt
-      });
-
-      res.json({ success: true, session });
-    } catch (error) {
-      res.status(400).json({ error: "Invalid payment data" });
     }
   });
 
@@ -107,7 +91,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/session", async (req, res) => {
     try {
       const sessionId = req.cookies?.sessionId;
-      
+
       if (!sessionId) {
         return res.status(401).json({ error: "No session found" });
       }
@@ -115,12 +99,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const session = await storage.getSession(sessionId);
       if (!session) {
         return res.status(401).json({ error: "Invalid session" });
-      }
-
-      // Check if session is expired
-      if (session.expiresAt && session.expiresAt < new Date()) {
-        await storage.deleteSession(sessionId);
-        return res.status(401).json({ error: "Session expired" });
       }
 
       res.json({ session });
@@ -131,7 +109,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // System status endpoint
   app.get("/api/system-status", (req, res) => {
-    // Simulate real system metrics
     const status = {
       ping: Math.floor(Math.random() * 20) + 20,
       connection: "Connected",
@@ -144,7 +121,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/upload-video", upload.single('video'), async (req: any, res) => {
     try {
       const sessionId = req.cookies?.sessionId;
-      
+
       if (!sessionId) {
         return res.status(401).json({ error: "No session found" });
       }
@@ -158,7 +135,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "No video file uploaded" });
       }
 
-      // Get or create stream session
       let streamSession = await storage.getStreamSession(sessionId);
       if (!streamSession) {
         streamSession = await storage.createStreamSession({
@@ -171,7 +147,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Add video file to the session
       const videoFile = JSON.stringify({
         fileName: req.file.originalname,
         filePath: req.file.path,
@@ -201,20 +176,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/stream-config", async (req, res) => {
     try {
       const sessionId = req.cookies?.sessionId;
-      
+
       if (!sessionId) {
         return res.status(401).json({ error: "No session found" });
       }
 
       const { streamKeys, loopVideo, mobileMode } = streamConfigSchema.parse(req.body);
-      
+
       const streamSession = await storage.getStreamSession(sessionId);
       if (!streamSession) {
         return res.status(400).json({ error: "No stream session found" });
       }
 
       const keys = streamKeys.split('\n').filter(key => key.trim()).map(key => key.trim());
-      
+
       const updated = await storage.updateStreamSession(sessionId, {
         streamKeys: keys,
         loopVideo,
@@ -232,7 +207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { action } = req.params;
       const sessionId = req.cookies?.sessionId;
-      
+
       if (!sessionId) {
         return res.status(401).json({ error: "No session found" });
       }
@@ -251,21 +226,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: "No stream keys configured" });
         }
 
-        // Stop any existing stream
         if (activeStreams.has(sessionId)) {
           activeStreams.get(sessionId)?.kill();
           activeStreams.delete(sessionId);
         }
 
-        // Use the first video file for streaming
         const firstVideo = JSON.parse(streamSession.videoFiles[0]);
         if (!fs.existsSync(firstVideo.filePath)) {
           return res.status(400).json({ error: "Video file not found" });
         }
 
-        // Build FFmpeg command for multi-streaming
         const ffmpegArgs = [
-          '-re', // Read input at native frame rate
+          '-re',
           '-i', firstVideo.filePath,
           '-c:v', 'libx264',
           '-preset', streamSession.mobileMode ? 'fast' : 'medium',
@@ -280,12 +252,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           '-ar', '44100'
         ];
 
-        // Add loop option if enabled
         if (streamSession.loopVideo) {
           ffmpegArgs.splice(1, 0, '-stream_loop', '-1');
         }
 
-        // Add output streams for each YouTube key
         streamSession.streamKeys.forEach(key => {
           ffmpegArgs.push(
             '-f', 'flv',
@@ -294,7 +264,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         const ffmpegProcess = spawn('ffmpeg', ffmpegArgs);
-        
+
         ffmpegProcess.on('error', (error) => {
           console.error('FFmpeg error:', error);
         });
@@ -308,11 +278,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeStreams.set(sessionId, ffmpegProcess);
         await storage.updateStreamSession(sessionId, { isActive: true });
 
-        res.json({ 
-          success: true, 
-          message: "Stream started",
-          activeStreams: streamSession.streamKeys.length
-        });
+        res.json({ success: true, message: "Stream started" });
 
       } else if (action === "stop") {
         const process = activeStreams.get(sessionId);
@@ -323,7 +289,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         await storage.updateStreamSession(sessionId, { isActive: false });
 
-        // Clean up uploaded files
         if (streamSession.videoFiles) {
           streamSession.videoFiles.forEach(videoFileStr => {
             const videoFile = JSON.parse(videoFileStr);
@@ -347,22 +312,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/stream-status", async (req, res) => {
     try {
       const sessionId = req.cookies?.sessionId;
-      
+
       if (!sessionId) {
         return res.status(401).json({ error: "No session found" });
       }
 
       const streamSession = await storage.getStreamSession(sessionId);
-      
+
       let fileName = '';
       let hasFile = false;
-      
+
       if (streamSession?.videoFiles && streamSession.videoFiles.length > 0) {
         const firstVideo = JSON.parse(streamSession.videoFiles[0]);
         fileName = firstVideo.fileName;
         hasFile = fs.existsSync(firstVideo.filePath);
       }
-      
+
       res.json({
         isActive: streamSession?.isActive || false,
         hasFile,
