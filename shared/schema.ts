@@ -63,6 +63,5 @@ export type Session = typeof sessions.$inferSelect;
 export type InsertSession = z.infer<typeof insertSessionSchema>;
 export type StreamSession = typeof streamSessions.$inferSelect;
 export type InsertStreamSession = z.infer<typeof insertStreamSessionSchema>;
-export type LoginData = z.infer<typeof loginSchema>;
 export type PaymentData = z.infer<typeof paymentSchema>;
 export type StreamConfig = z.infer<typeof streamConfigSchema>;
