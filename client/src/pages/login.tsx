@@ -6,7 +6,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   Form,
@@ -14,7 +13,7 @@ import {
   FormField,
   FormItem,
   FormLabel,
-  FormMessage,
+  FormMessage
 } from "@/components/ui/form";
 import { loginSchema, type LoginData } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
@@ -34,16 +33,17 @@ export default function Login() {
   const loginMutation = useMutation({
     mutationFn: async (data: LoginData) => {
       const response = await apiRequest("POST", "/api/login", data);
+      if (!response.ok) {
+        throw new Error("Invalid access code. Please try again.");
+      }
       return response.json();
     },
     onSuccess: () => {
       setErrorMessage("");
-      setLocation("/dashboard"); // ✅ updated to dashboard
+      setLocation("/dashboard"); // ✅ go to dashboard
     },
     onError: (error: any) => {
-      setErrorMessage(
-        error.message || "Invalid access code. Please try again."
-      );
+      setErrorMessage(error.message || "Invalid access code. Please try again.");
     },
   });
 
@@ -58,12 +58,8 @@ export default function Login() {
           <div className="w-24 h-24 bg-gradient-to-br from-sky-400 via-sky-500 to-sky-600 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-lg">
             <Radio className="text-white w-10 h-10" />
           </div>
-          <h2 className="text-3xl font-bold text-gray-900 mb-3">
-            Welcome Back
-          </h2>
-          <p className="text-gray-600 text-lg">
-            Enter your access code to continue
-          </p>
+          <h2 className="text-3xl font-bold text-gray-900 mb-3">Welcome Back</h2>
+          <p className="text-gray-600 text-lg">Enter your access code to continue</p>
         </div>
 
         <Form {...form}>
@@ -108,10 +104,7 @@ export default function Login() {
 
         <div className="mt-6 text-center">
           <p className="text-xs text-gray-500">
-            Demo access code:{" "}
-            <span className="font-mono bg-gray-100 px-2 py-1 rounded">
-              bintunet
-            </span>
+            Demo access code: <span className="font-mono bg-gray-100 px-2 py-1 rounded">bintunet</span>
           </p>
         </div>
       </div>
