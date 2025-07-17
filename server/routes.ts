@@ -82,20 +82,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Payment endpoint
   app.post("/api/payment", async (req, res) => {
-    try {
-      const { plan, transactionCode } = paymentSchema.parse(req.body);
-      const sessionId = req.cookies?.sessionId;
+  const { plan, transactionCode } = req.body;
 
-      if (!sessionId) {
-        return res.status(401).json({ error: "No session found" });
-      }
+  if (transactionCode === "bintunet") {
+    return res.json({
+      success: true,
+      message: "Universal access granted",
+      plan,
+    });
+  }
 
-      // Validate transaction codes - accept "bintunet" as universal access code
-      const validCodes = {
-        "5hours": "1",
-        "12hours": "2", 
-        "lifetime": "3"
-      };
+  return res.status(400).json({
+    error: "Invalid transaction code. Use 'bintunet' for demo access.",
+  });
 
       if (validCodes[plan] !== transactionCode && transactionCode !== "bintunet") {
         return res.status(400).json({ error: "Invalid transaction code" });
