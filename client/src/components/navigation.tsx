@@ -7,8 +7,7 @@ interface NavigationProps {
 export function Navigation({ currentPage }: NavigationProps) {
   const pageNames = {
     '/': 'Login',
-    '/payments': 'Payments',
-    '/dashboard': 'Dashboard'
+    '/dashboard': 'Dashboard',
   };
 
   return (
