@@ -82,14 +82,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Payment endpoint
   app.post("/api/payment", async (req, res) => {
-  const { plan, transactionCode } = req.body;
+  const { transactionCode } = req.body;
 
   if (transactionCode === "bintunet") {
     return res.json({
       success: true,
       message: "Universal access granted",
-      plan,
     });
+  }
+
+  return res.status(400).json({
+    error: "Invalid transaction code. Use 'bintunet' for demo access.",
+  });
  
   return res.status(400).json({
     error: "Invalid transaction code. Use 'bintunet' for demo access.",
